@@ -10,16 +10,16 @@ ENV UV_SYSTEM_PYTHON=1
 
 RUN ldconfig /usr/local/cuda-13.0/compat/
 
-# Install PyTorch before vLLM, then install the custom vLLM branch.
+# Install the PyTorch versions expected by the custom vLLM branch.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install torch torchvision
+    uv pip install torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --torch-backend=cu130
 
 RUN git clone --branch v0.20.1-harmony-continuation --depth 1 \
     https://github.com/seokhyunan/vllm.git /vllm-workspace
 
 WORKDIR /vllm-workspace
 RUN --mount=type=cache,target=/root/.cache/uv \
-    VLLM_USE_PRECOMPILED=1 uv pip install --editable . --torch-backend=auto
+    VLLM_USE_PRECOMPILED=1 uv pip install --editable . --torch-backend=cu130
 WORKDIR /
 
 # Install additional Python dependencies (after vLLM to avoid PyTorch version conflicts)
