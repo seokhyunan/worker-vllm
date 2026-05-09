@@ -11,7 +11,7 @@ RUN ldconfig /usr/local/cuda-12.9/compat/
 
 # Install the PyTorch versions expected by the custom vLLM branch.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu129
+    uv pip install --system torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
 
 RUN git clone --branch v0.20.1-harmony-continuation --depth 1 \
     https://github.com/seokhyunan/vllm.git /vllm-workspace
