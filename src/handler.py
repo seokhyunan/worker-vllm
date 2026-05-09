@@ -1,9 +1,15 @@
 import sys
 import multiprocessing
 import traceback
+import logging
 import runpod
 from runpod import RunPodLogger
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    force=True,
+)
 log = RunPodLogger()
 
 vllm_engine = None
@@ -39,11 +45,20 @@ if __name__ == "__main__" or multiprocessing.current_process().name == "MainProc
     try:
         from engine import vLLMEngine, OpenAIvLLMEngine
 
+        print("[worker-vllm] initializing vLLM engines", file=sys.stderr, flush=True)
         vllm_engine = vLLMEngine()
         openai_engine = OpenAIvLLMEngine(vllm_engine)
+        print("[worker-vllm] vLLM engines initialized successfully", file=sys.stderr, flush=True)
         log.info("vLLM engines initialized successfully")
     except Exception as e:
-        log.error(f"Worker startup failed: {e}\n{traceback.format_exc()}")
+        startup_traceback = traceback.format_exc()
+        print(
+            f"[worker-vllm] Worker startup failed: {e}\n{startup_traceback}",
+            file=sys.stderr,
+            flush=True,
+        )
+        logging.exception("Worker startup failed")
+        log.error(f"Worker startup failed: {e}\n{startup_traceback}")
         sys.exit(1)
 
     runpod.serverless.start(
