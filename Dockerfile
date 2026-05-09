@@ -6,25 +6,26 @@ RUN apt-get update -y \
     && curl -LsSf https://astral.sh/uv/install.sh  | sh
 
 ENV PATH="/root/.local/bin:$PATH"
+ENV UV_TORCH_BACKEND=cu128
 
 RUN ldconfig /usr/local/cuda-12.9/compat/
 
 # Install the PyTorch versions expected by the custom vLLM branch.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    uv pip install --system torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --torch-backend=cu128
 
 RUN git clone --branch v0.20.1-harmony-continuation --depth 1 \
     https://github.com/seokhyunan/vllm.git /vllm-workspace
 
 WORKDIR /vllm-workspace
 RUN --mount=type=cache,target=/root/.cache/uv \
-    VLLM_USE_PRECOMPILED=1 uv pip install --system --editable . --torch-backend=auto
+    VLLM_USE_PRECOMPILED=1 uv pip install --system --editable . --torch-backend=cu128
 WORKDIR /
 
 # Install additional Python dependencies (after vLLM to avoid PyTorch version conflicts)
 COPY builder/requirements.txt /requirements.txt
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system -r /requirements.txt
+    uv pip install --system -r /requirements.txt --torch-backend=cu128
 
 # Suppress Ray metrics agent warnings and keep tokenizers thread usage bounded.
 ENV HF_DATASETS_CACHE="/runpod-volume/huggingface-cache/datasets" \
