@@ -27,6 +27,17 @@
         }
       },
       "timeout": 30000
+    },
+    {
+      "name": "openai_tokenize_test",
+      "input": {
+        "openai_route": "/v1/tokenize",
+        "openai_input": {
+          "prompt": "Hello world",
+          "return_token_strs": true
+        }
+      },
+      "timeout": 30000
     }
   ],
   "config": {

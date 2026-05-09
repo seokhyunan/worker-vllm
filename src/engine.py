@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import json
 import logging
 import os
@@ -20,11 +21,28 @@ from vllm.entrypoints.openai.models.serving import OpenAIServingModels
 from vllm.entrypoints.openai.responses.protocol import ResponsesRequest, ResponsesResponse
 from vllm.entrypoints.openai.responses.serving import OpenAIServingResponses
 from vllm.entrypoints.serve.render.serving import OpenAIServingRender
+from vllm.entrypoints.serve.tokenize.protocol import (
+    TokenizeChatRequest,
+    TokenizeCompletionRequest,
+    TokenizeResponse,
+)
+from vllm.entrypoints.serve.tokenize.serving import OpenAIServingTokenization
 
 from constants import DEFAULT_BATCH_SIZE, DEFAULT_BATCH_SIZE_GROWTH_FACTOR, DEFAULT_MAX_CONCURRENCY, DEFAULT_MIN_BATCH_SIZE
 from engine_args import get_engine_args
 from tokenizer import TokenizerWrapper
 from utils import BatchSize, DummyRequest, JobInput, create_error_response
+
+
+def _filter_supported_kwargs(callable_obj, kwargs):
+    signature = inspect.signature(callable_obj)
+    if any(
+        param.kind == inspect.Parameter.VAR_KEYWORD
+        for param in signature.parameters.values()
+    ):
+        return kwargs
+    return {key: value for key, value in kwargs.items() if key in signature.parameters}
+
 
 class vLLMEngine:
     def __init__(self, engine = None):
@@ -282,20 +300,47 @@ class OpenAIvLLMEngine(vLLMEngine):
         if self.tokenizer and hasattr(self.tokenizer, 'tokenizer'):
             chat_template = self.tokenizer.tokenizer.chat_template
 
+        trust_request_chat_template = os.getenv(
+            'TRUST_REQUEST_CHAT_TEMPLATE',
+            'false'
+        ).lower() == 'true'
+
         self.openai_serving_render = OpenAIServingRender(
-            model_config=self.llm.model_config,
-            renderer=self.llm.renderer,
-            io_processor=self.llm.io_processor,
-            model_registry=self.serving_models.registry,
-            request_logger=None,
-            chat_template=chat_template,
-            chat_template_content_format="auto",
-            trust_request_chat_template=os.getenv('TRUST_REQUEST_CHAT_TEMPLATE', 'false').lower() == 'true',
-            enable_auto_tools=os.getenv('ENABLE_AUTO_TOOL_CHOICE', 'false').lower() == 'true',
-            exclude_tools_when_tool_choice_none=os.getenv('EXCLUDE_TOOLS_WHEN_TOOL_CHOICE_NONE', 'false').lower() == 'true',
-            tool_parser=os.getenv('TOOL_CALL_PARSER', "") or None,
-            reasoning_parser=os.getenv('REASONING_PARSER', "") or None,
-            log_error_stack=os.getenv('LOG_ERROR_STACK', 'false').lower() == 'true',
+            **_filter_supported_kwargs(OpenAIServingRender, {
+                "model_config": self.llm.model_config,
+                "renderer": self.llm.renderer,
+                "io_processor": getattr(self.llm, "io_processor", None),
+                "model_registry": self.serving_models.registry,
+                "request_logger": None,
+                "chat_template": chat_template,
+                "chat_template_content_format": "auto",
+                "trust_request_chat_template": trust_request_chat_template,
+                "enable_auto_tools": os.getenv(
+                    'ENABLE_AUTO_TOOL_CHOICE',
+                    'false'
+                ).lower() == 'true',
+                "exclude_tools_when_tool_choice_none": os.getenv(
+                    'EXCLUDE_TOOLS_WHEN_TOOL_CHOICE_NONE',
+                    'false'
+                ).lower() == 'true',
+                "tool_parser": os.getenv('TOOL_CALL_PARSER', "") or None,
+                "reasoning_parser": os.getenv('REASONING_PARSER', "") or None,
+                "default_chat_template_kwargs": None,
+                "log_error_stack": os.getenv('LOG_ERROR_STACK', 'false').lower() == 'true',
+            })
+        )
+
+        self.tokenization_engine = OpenAIServingTokenization(
+            **_filter_supported_kwargs(OpenAIServingTokenization, {
+                "engine_client": self.llm,
+                "models": self.serving_models,
+                "openai_serving_render": self.openai_serving_render,
+                "request_logger": None,
+                "chat_template": chat_template,
+                "chat_template_content_format": "auto",
+                "default_chat_template_kwargs": None,
+                "trust_request_chat_template": trust_request_chat_template,
+            })
         )
 
         self.chat_engine = OpenAIServingChat(
@@ -378,12 +423,54 @@ class OpenAIvLLMEngine(vLLMEngine):
         elif openai_request.openai_route == "/v1/messages":
             async for response in self._handle_messages_request(openai_request):
                 yield response
+        elif openai_request.openai_route in ["/tokenize", "/v1/tokenize"]:
+            yield await self._handle_tokenize_request(openai_request)
         else:
             yield create_error_response("Invalid route").model_dump()
     
     async def _handle_model_request(self):
         models = await self.serving_models.show_available_models()
         return models.model_dump()
+
+    async def _handle_tokenize_request(self, openai_request: JobInput):
+        request_id = getattr(openai_request, "request_id", "unknown")
+        request_payload = openai_request.openai_input or {}
+
+        if "prompt" in request_payload:
+            request_class = TokenizeCompletionRequest
+        elif "messages" in request_payload:
+            request_class = TokenizeChatRequest
+        else:
+            return create_error_response("Expected `prompt` or `messages`.").model_dump()
+
+        try:
+            request = request_class(**request_payload)
+        except Exception as e:
+            logging.error(
+                "Invalid tokenize request: %s",
+                e,
+                extra={"request_id": request_id}
+            )
+            return create_error_response(str(e)).model_dump()
+
+        try:
+            response = await self.tokenization_engine.create_tokenize(
+                request,
+                raw_request=DummyRequest(),
+            )
+        except Exception as e:
+            logging.error(
+                "Failed to tokenize request: %s",
+                e,
+                extra={"request_id": request_id},
+                exc_info=True
+            )
+            return create_error_response(str(e)).model_dump()
+
+        if isinstance(response, (ErrorResponse, TokenizeResponse)):
+            return response.model_dump()
+
+        return create_error_response("Unexpected tokenize response").model_dump()
     
     async def _handle_chat_or_completion_request(self, openai_request: JobInput):
         if openai_request.openai_route == "/v1/chat/completions":

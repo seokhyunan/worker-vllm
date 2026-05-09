@@ -27,7 +27,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system -r /requirements.txt
 
 # Suppress Ray metrics agent warnings and keep tokenizers thread usage bounded.
-ENV RAY_METRICS_EXPORT_ENABLED=0 \
+ENV HF_DATASETS_CACHE="/runpod-volume/huggingface-cache/datasets" \
+    HUGGINGFACE_HUB_CACHE="/runpod-volume/huggingface-cache/hub" \
+    HF_HOME="/runpod-volume/huggingface-cache/hub" \
+    HF_HUB_ENABLE_HF_TRANSFER=0 \
+    RAY_METRICS_EXPORT_ENABLED=0 \
     RAY_DISABLE_USAGE_STATS=1 \
     TOKENIZERS_PARALLELISM=false \
     RAYON_NUM_THREADS=4

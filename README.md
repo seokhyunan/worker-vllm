@@ -31,6 +31,7 @@ Current vLLM version: [0.19.1](https://github.com/vllm-project/vllm/releases/tag
   - [Examples: Using your Runpod endpoint with OpenAI](#examples-using-your-runpod-endpoint-with-openai)
     - [Chat Completions](#chat-completions)
     - [Getting a list of names for available models](#getting-a-list-of-names-for-available-models)
+    - [Tokenize API](#tokenize-api)
     - [OpenAI Responses API](#openai-responses-api)
     - [Anthropic Messages API](#anthropic-messages-api)
 - [Usage: Standard (Non-OpenAI)](#usage-standard-non-openai)
@@ -155,7 +156,7 @@ You can deploy **any model on Hugging Face** that is supported by vLLM. For the 
 
 # Usage: OpenAI Compatibility
 
-The vLLM Worker is fully compatible with OpenAI's API, and you can use it with any OpenAI Codebase by changing only 3 lines in total. The supported routes are <ins>Chat Completions</ins>, <ins>Models</ins>, <ins>Responses</ins>, and <ins>Messages</ins> - with both streaming and non-streaming.
+The vLLM Worker is fully compatible with OpenAI's API, and you can use it with any OpenAI Codebase by changing only 3 lines in total. The supported routes are <ins>Chat Completions</ins>, <ins>Models</ins>, <ins>Tokenize</ins>, <ins>Responses</ins>, and <ins>Messages</ins> - with both streaming and non-streaming where applicable.
 
 ## Modifying your OpenAI Codebase to use your deployed vLLM Worker
 
@@ -336,6 +337,47 @@ In the case of baking the model into the image, sometimes the repo may not be ac
 models_response = client.models.list()
 list_of_models = [model.id for model in models_response]
 print(list_of_models)
+```
+
+### Tokenize API
+
+**Path:** `/openai/v1/tokenize` (full URL: `https://api.runpod.ai/v2/<YOUR ENDPOINT ID>/openai/v1/tokenize`)
+
+Supports vLLM's OpenAI-compatible tokenize request shape for both completion-style prompts and chat messages.
+
+**Completion-style request:**
+
+```json
+{
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "prompt": "Hello world",
+  "return_token_strs": true
+}
+```
+
+**Chat-style request:**
+
+```json
+{
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "messages": [
+    {"role": "user", "content": "Hello!"}
+  ],
+  "add_generation_prompt": true
+}
+```
+
+**Using HTTP requests:**
+
+```bash
+curl https://api.runpod.ai/v2/<YOUR ENDPOINT ID>/openai/v1/tokenize \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <YOUR RUNPOD API KEY>" \
+  -d '{
+    "model": "<YOUR DEPLOYED MODEL REPO/NAME>",
+    "prompt": "Hello world",
+    "return_token_strs": true
+  }'
 ```
 
 ### OpenAI Responses API

@@ -163,6 +163,34 @@ For external clients and SDKs, use the `/openai/v1` path prefix with your RunPod
 {}
 ```
 
+#### Tokenize API
+
+**Path:** `/openai/v1/tokenize`
+
+Supports vLLM's OpenAI-compatible tokenize request shape for completion-style prompts and chat messages.
+
+Completion-style request:
+
+```json
+{
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "prompt": "Hello world",
+  "return_token_strs": true
+}
+```
+
+Chat-style request:
+
+```json
+{
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "messages": [
+    {"role": "user", "content": "Hello!"}
+  ],
+  "add_generation_prompt": true
+}
+```
+
 #### OpenAI Responses API
 
 **Path:** `/openai/v1/responses`
