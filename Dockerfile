@@ -1,12 +1,14 @@
 FROM runpod/base:1.0.3-cuda1300-ubuntu2404
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends python3-pip curl git ca-certificates \
+    && apt-get install -y --no-install-recommends python3-pip python3-venv curl git ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && curl -LsSf https://astral.sh/uv/install.sh  | sh
 
-ENV PATH="/root/.local/bin:$PATH"
-ENV UV_SYSTEM_PYTHON=1
+ENV VIRTUAL_ENV="/opt/venv"
+ENV PATH="${VIRTUAL_ENV}/bin:/root/.local/bin:$PATH"
+
+RUN uv venv "${VIRTUAL_ENV}"
 
 RUN ldconfig /usr/local/cuda-13.0/compat/
 
