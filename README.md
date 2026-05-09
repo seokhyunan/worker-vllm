@@ -81,10 +81,6 @@ Any env var whose name matches a valid `AsyncEngineArgs` field (uppercased) is a
 
 For the complete list of all available environment variables, examples, and detailed descriptions: **[Configuration](docs/configuration.md)**
 
-### Specify Transformers Version
-To change the version of the [Transformers library](https://github.com/huggingface/transformers) use the `TRANSFORMERS_VERSION` environment variable to specify the version you want to use. Note this might break the handler, so use for development purposes. 
-
-
 ## Option 2: Build Docker Image with Model Inside
 
 To build an image with the model baked in, you must specify the following docker arguments when building the image.
