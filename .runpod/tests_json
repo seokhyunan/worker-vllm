@@ -38,6 +38,16 @@
         }
       },
       "timeout": 30000
+    },
+    {
+      "name": "openai_detokenize_test",
+      "input": {
+        "openai_route": "/v1/detokenize",
+        "openai_input": {
+          "tokens": [9906, 1917]
+        }
+      },
+      "timeout": 30000
     }
   ],
   "config": {

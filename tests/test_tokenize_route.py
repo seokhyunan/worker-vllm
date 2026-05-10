@@ -76,6 +76,23 @@ class _TokenizeChatRequest(_DumpModel):
         super().__init__(**kwargs)
 
 
+class _DetokenizeRequest(_DumpModel):
+    def __init__(self, **kwargs):
+        if "tokens" not in kwargs:
+            raise ValueError("tokens is required")
+        tokens = kwargs["tokens"]
+        if (
+            not isinstance(tokens, list)
+            or any(not isinstance(token, int) or token < 0 for token in tokens)
+        ):
+            raise ValueError("tokens must be a list of non-negative integers")
+        super().__init__(**kwargs)
+
+
+class _DetokenizeResponse(_DumpModel):
+    pass
+
+
 class _TokenizeResponse(_DumpModel):
     pass
 
@@ -90,18 +107,34 @@ class _ErrorResponse:
 
 
 class _FakeTokenizationEngine:
-    def __init__(self, response=None):
-        self.response = response or _TokenizeResponse(
+    def __init__(
+        self,
+        tokenize_response=None,
+        detokenize_response=None,
+        detokenize_exception=None,
+    ):
+        self.tokenize_response = tokenize_response or _TokenizeResponse(
             tokens=[9906, 1917],
             token_strs=["Hello", " world"],
             count=2,
             max_model_len=4096,
         )
-        self.request = None
+        self.detokenize_response = detokenize_response or _DetokenizeResponse(
+            prompt="Hello world"
+        )
+        self.detokenize_exception = detokenize_exception
+        self.tokenize_request = None
+        self.detokenize_request = None
 
     async def create_tokenize(self, request, raw_request):
-        self.request = request
-        return self.response
+        self.tokenize_request = request
+        return self.tokenize_response
+
+    async def create_detokenize(self, request, raw_request):
+        self.detokenize_request = request
+        if self.detokenize_exception:
+            raise self.detokenize_exception
+        return self.detokenize_response
 
 
 def _install_engine_stubs():
@@ -171,6 +204,8 @@ def _install_engine_stubs():
     _install_module("vllm.entrypoints.serve.tokenize")
     _install_module(
         "vllm.entrypoints.serve.tokenize.protocol",
+        DetokenizeRequest=_DetokenizeRequest,
+        DetokenizeResponse=_DetokenizeResponse,
         TokenizeChatRequest=_TokenizeChatRequest,
         TokenizeCompletionRequest=_TokenizeCompletionRequest,
         TokenizeResponse=_TokenizeResponse,
@@ -212,9 +247,17 @@ async def _collect(async_generator):
     return [item async for item in async_generator]
 
 
-def _make_engine(response=None):
+def _make_engine(
+    tokenize_response=None,
+    detokenize_response=None,
+    detokenize_exception=None,
+):
     instance = engine.OpenAIvLLMEngine.__new__(engine.OpenAIvLLMEngine)
-    instance.tokenization_engine = _FakeTokenizationEngine(response=response)
+    instance.tokenization_engine = _FakeTokenizationEngine(
+        tokenize_response=tokenize_response,
+        detokenize_response=detokenize_response,
+        detokenize_exception=detokenize_exception,
+    )
     instance._ensure_engines_initialized = _noop
     return instance
 
@@ -250,7 +293,10 @@ def test_tokenize_prompt_uses_completion_request():
 
     assert result["tokens"] == [9906, 1917]
     assert result["token_strs"] == ["Hello", " world"]
-    assert isinstance(instance.tokenization_engine.request, _TokenizeCompletionRequest)
+    assert isinstance(
+        instance.tokenization_engine.tokenize_request,
+        _TokenizeCompletionRequest,
+    )
 
 
 def test_tokenize_messages_uses_chat_request():
@@ -261,7 +307,7 @@ def test_tokenize_messages_uses_chat_request():
     ))
 
     assert result["count"] == 2
-    assert isinstance(instance.tokenization_engine.request, _TokenizeChatRequest)
+    assert isinstance(instance.tokenization_engine.tokenize_request, _TokenizeChatRequest)
 
 
 def test_tokenize_prefers_prompt_when_prompt_and_messages_are_present():
@@ -274,7 +320,10 @@ def test_tokenize_prefers_prompt_when_prompt_and_messages_are_present():
         })
     ))
 
-    assert isinstance(instance.tokenization_engine.request, _TokenizeCompletionRequest)
+    assert isinstance(
+        instance.tokenization_engine.tokenize_request,
+        _TokenizeCompletionRequest,
+    )
 
 
 def test_tokenize_missing_prompt_and_messages_returns_error_payload():
@@ -292,7 +341,7 @@ def test_tokenize_missing_prompt_and_messages_returns_error_payload():
 
 def test_tokenize_returns_vllm_error_response_payload():
     error_response = _ErrorResponse("The model `missing` does not exist.", code=404)
-    instance = _make_engine(response=error_response)
+    instance = _make_engine(tokenize_response=error_response)
 
     result = asyncio.run(instance._handle_tokenize_request(
         _OpenAIRequest({"model": "missing", "prompt": "Hello world"})
@@ -302,5 +351,100 @@ def test_tokenize_returns_vllm_error_response_payload():
         "error": {
             "message": "The model `missing` does not exist.",
             "code": 404,
+        }
+    }
+
+
+def test_generate_routes_v1_detokenize_to_tokenization_handler():
+    instance = _make_engine()
+
+    results = asyncio.run(_collect(instance.generate(
+        _OpenAIRequest({"tokens": [9906, 1917]}, openai_route="/v1/detokenize")
+    )))
+
+    assert len(results) == 1
+    assert results[0] == {"prompt": "Hello world"}
+
+
+def test_generate_routes_native_detokenize_to_tokenization_handler():
+    instance = _make_engine()
+
+    results = asyncio.run(_collect(instance.generate(
+        _OpenAIRequest({"tokens": [9906, 1917]}, openai_route="/detokenize")
+    )))
+
+    assert len(results) == 1
+    assert results[0] == {"prompt": "Hello world"}
+
+
+def test_detokenize_tokens_uses_detokenize_request():
+    instance = _make_engine()
+
+    result = asyncio.run(instance._handle_detokenize_request(
+        _OpenAIRequest({"tokens": [9906, 1917]})
+    ))
+
+    assert result == {"prompt": "Hello world"}
+    assert isinstance(
+        instance.tokenization_engine.detokenize_request,
+        _DetokenizeRequest,
+    )
+
+
+def test_detokenize_returns_vllm_error_response_payload():
+    error_response = _ErrorResponse("The model `missing` does not exist.", code=404)
+    instance = _make_engine(detokenize_response=error_response)
+
+    result = asyncio.run(instance._handle_detokenize_request(
+        _OpenAIRequest({"model": "missing", "tokens": [9906, 1917]})
+    ))
+
+    assert result == {
+        "error": {
+            "message": "The model `missing` does not exist.",
+            "code": 404,
+        }
+    }
+
+
+def test_detokenize_missing_tokens_returns_error_payload():
+    instance = _make_engine()
+
+    result = asyncio.run(instance._handle_detokenize_request(_OpenAIRequest({})))
+
+    assert result == {
+        "error": {
+            "message": "tokens is required",
+            "code": 400,
+        }
+    }
+
+
+def test_detokenize_invalid_tokens_returns_error_payload():
+    instance = _make_engine()
+
+    result = asyncio.run(instance._handle_detokenize_request(
+        _OpenAIRequest({"tokens": [-1]})
+    ))
+
+    assert result == {
+        "error": {
+            "message": "tokens must be a list of non-negative integers",
+            "code": 400,
+        }
+    }
+
+
+def test_detokenize_overflow_error_returns_error_payload():
+    instance = _make_engine(detokenize_exception=OverflowError("token id too large"))
+
+    result = asyncio.run(instance._handle_detokenize_request(
+        _OpenAIRequest({"tokens": [2 ** 63]})
+    ))
+
+    assert result == {
+        "error": {
+            "message": "token id too large",
+            "code": 400,
         }
     }

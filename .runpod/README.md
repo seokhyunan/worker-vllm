@@ -191,6 +191,19 @@ Chat-style request:
 }
 ```
 
+#### Detokenize API
+
+**Path:** `/openai/v1/detokenize`
+
+Supports vLLM's OpenAI-compatible detokenize request shape.
+
+```json
+{
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "tokens": [9906, 1917]
+}
+```
+
 #### OpenAI Responses API
 
 **Path:** `/openai/v1/responses`

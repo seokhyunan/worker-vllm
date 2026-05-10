@@ -141,7 +141,7 @@ The way this works is that the first request will have a batch size of `DEFAULT_
 
 | Variable               | Default | Type/Choices | Description                                                                                                                                                                |
 | ---------------------- | ------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MAX_CONCURRENCY`      | `30`    | `int`        | Max concurrent requests per worker. vLLM has an internal queue, so you don't have to worry about limiting by VRAM, this is for improving scaling/load balancing efficiency |
+| `MAX_CONCURRENCY`      | `300`   | `int`        | Max concurrent requests per worker. vLLM has an internal queue, so you don't have to worry about limiting by VRAM, this is for improving scaling/load balancing efficiency |
 | `DISABLE_LOG_STATS`    | False   | `bool`       | Enables or disables vLLM stats logging.                                                                                                                                    |
 | `ENABLE_LOG_REQUESTS`  | False   | `bool`       | Enables vLLM request logging. (Replaces deprecated `DISABLE_LOG_REQUESTS` in vLLM 0.15.0)                                                                                  |
 

@@ -22,6 +22,8 @@ from vllm.entrypoints.openai.responses.protocol import ResponsesRequest, Respons
 from vllm.entrypoints.openai.responses.serving import OpenAIServingResponses
 from vllm.entrypoints.serve.render.serving import OpenAIServingRender
 from vllm.entrypoints.serve.tokenize.protocol import (
+    DetokenizeRequest,
+    DetokenizeResponse,
     TokenizeChatRequest,
     TokenizeCompletionRequest,
     TokenizeResponse,
@@ -425,6 +427,8 @@ class OpenAIvLLMEngine(vLLMEngine):
                 yield response
         elif openai_request.openai_route in ["/tokenize", "/v1/tokenize"]:
             yield await self._handle_tokenize_request(openai_request)
+        elif openai_request.openai_route in ["/detokenize", "/v1/detokenize"]:
+            yield await self._handle_detokenize_request(openai_request)
         else:
             yield create_error_response("Invalid route").model_dump()
     
@@ -471,6 +475,46 @@ class OpenAIvLLMEngine(vLLMEngine):
             return response.model_dump()
 
         return create_error_response("Unexpected tokenize response").model_dump()
+
+    async def _handle_detokenize_request(self, openai_request: JobInput):
+        request_id = getattr(openai_request, "request_id", "unknown")
+        request_payload = openai_request.openai_input or {}
+
+        try:
+            request = DetokenizeRequest(**request_payload)
+        except Exception as e:
+            logging.error(
+                "Invalid detokenize request: %s",
+                e,
+                extra={"request_id": request_id}
+            )
+            return create_error_response(str(e)).model_dump()
+
+        try:
+            response = await self.tokenization_engine.create_detokenize(
+                request,
+                raw_request=DummyRequest(),
+            )
+        except OverflowError as e:
+            logging.error(
+                "Invalid detokenize token ids: %s",
+                e,
+                extra={"request_id": request_id}
+            )
+            return create_error_response(str(e)).model_dump()
+        except Exception as e:
+            logging.error(
+                "Failed to detokenize request: %s",
+                e,
+                extra={"request_id": request_id},
+                exc_info=True
+            )
+            return create_error_response(str(e)).model_dump()
+
+        if isinstance(response, (ErrorResponse, DetokenizeResponse)):
+            return response.model_dump()
+
+        return create_error_response("Unexpected detokenize response").model_dump()
     
     async def _handle_chat_or_completion_request(self, openai_request: JobInput):
         if openai_request.openai_route == "/v1/chat/completions":

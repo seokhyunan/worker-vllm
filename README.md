@@ -32,6 +32,7 @@ Current vLLM version: [0.19.1](https://github.com/vllm-project/vllm/releases/tag
     - [Chat Completions](#chat-completions)
     - [Getting a list of names for available models](#getting-a-list-of-names-for-available-models)
     - [Tokenize API](#tokenize-api)
+    - [Detokenize API](#detokenize-api)
     - [OpenAI Responses API](#openai-responses-api)
     - [Anthropic Messages API](#anthropic-messages-api)
 - [Usage: Standard (Non-OpenAI)](#usage-standard-non-openai)
@@ -67,7 +68,7 @@ Configure worker-vllm using environment variables:
 | `ENABLE_AUTO_TOOL_CHOICE`           | Enable automatic tool selection                   | false               | boolean (true or false)                                            |
 | `TOOL_CALL_PARSER`                  | Parser for tool calls                             |                     | "mistral", "hermes", "llama3_json", "granite", "deepseek_v3", etc. |
 | `OPENAI_SERVED_MODEL_NAME_OVERRIDE` | Override served model name in API                 |                     | String                                                             |
-| `MAX_CONCURRENCY`                   | Maximum concurrent requests                       | 30                  | Integer                                                            |
+| `MAX_CONCURRENCY`                   | Maximum concurrent requests                       | 300                 | Integer                                                            |
 
 **Pass any vLLM engine arg** not listed above by setting an environment variable with the **UPPERCASED** field name (same names vLLM uses). The worker auto-discovers all `AsyncEngineArgs` fields from env. For example:
 
@@ -373,6 +374,31 @@ curl https://api.runpod.ai/v2/<YOUR ENDPOINT ID>/openai/v1/tokenize \
     "model": "<YOUR DEPLOYED MODEL REPO/NAME>",
     "prompt": "Hello world",
     "return_token_strs": true
+  }'
+```
+
+### Detokenize API
+
+**Path:** `/openai/v1/detokenize` (full URL: `https://api.runpod.ai/v2/<YOUR ENDPOINT ID>/openai/v1/detokenize`)
+
+Supports vLLM's OpenAI-compatible detokenize request shape.
+
+```json
+{
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "tokens": [9906, 1917]
+}
+```
+
+**Using HTTP requests:**
+
+```bash
+curl https://api.runpod.ai/v2/<YOUR ENDPOINT ID>/openai/v1/detokenize \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <YOUR RUNPOD API KEY>" \
+  -d '{
+    "model": "<YOUR DEPLOYED MODEL REPO/NAME>",
+    "tokens": [9906, 1917]
   }'
 ```
 

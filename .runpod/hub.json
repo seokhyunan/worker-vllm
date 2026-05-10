@@ -700,7 +700,7 @@
           "name": "Max Concurrency",
           "type": "number",
           "description": "Max concurrent requests per worker. vLLM has an internal queue, so you don't have to worry about limiting by VRAM, this is for improving scaling/load balancing efficiency",
-          "default": 30,
+          "default": 300,
           "advanced": true
         }
       },
