@@ -1,11 +1,12 @@
-FROM nvidia/cuda:12.9.1-base-ubuntu22.04 
+FROM nvidia/cuda:12.9.1-devel-ubuntu22.04
 
 RUN apt-get update -y \
-    && apt-get install -y python3-pip curl git ca-certificates build-essential python3-dev \
+    && apt-get install -y python3-pip curl git ca-certificates build-essential python3-dev ninja-build \
     && rm -rf /var/lib/apt/lists/* \
     && curl -LsSf https://astral.sh/uv/install.sh  | sh
 
-ENV PATH="/root/.local/bin:$PATH"
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH="${CUDA_HOME}/bin:/root/.local/bin:$PATH"
 ENV UV_TORCH_BACKEND=cu129
 
 RUN ldconfig /usr/local/cuda-12.9/compat/
@@ -24,7 +25,7 @@ RUN git clone --filter=blob:none --no-checkout --branch "${VLLM_BRANCH}" --singl
 
 WORKDIR /vllm-workspace
 RUN VLLM_USE_PRECOMPILED=1 uv pip install --system --editable . --torch-backend=cu129
-RUN VLLM_DOCKER_BUILD_CONTEXT=1 bash -c 'bash <(curl -fsSL https://raw.githubusercontent.com/vllm-project/vllm/main/tools/install_deepgemm.sh)'
+RUN VLLM_DOCKER_BUILD_CONTEXT=1 bash tools/install_deepgemm.sh --cuda-version 12.9
 WORKDIR /
 
 # Install additional Python dependencies (after vLLM to avoid PyTorch version conflicts)
