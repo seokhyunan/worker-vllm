@@ -14,8 +14,14 @@ RUN ldconfig /usr/local/cuda-12.9/compat/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --torch-backend=cu129
 
-RUN git clone --branch v0.20.1-harmony-continuation --depth 1 \
-    https://github.com/seokhyunan/vllm.git /vllm-workspace
+ARG VLLM_REPO=https://github.com/seokhyunan/vllm.git
+ARG VLLM_BRANCH=v0.20.1-harmony-continuation
+ARG VLLM_COMMIT=5158c7f
+
+RUN git clone --filter=blob:none --no-checkout --branch "${VLLM_BRANCH}" --single-branch --depth 1 \
+    "${VLLM_REPO}" /vllm-workspace \
+    && cd /vllm-workspace \
+    && git checkout --detach "${VLLM_COMMIT}"
 
 WORKDIR /vllm-workspace
 RUN --mount=type=cache,target=/root/.cache/uv \
