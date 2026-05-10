@@ -11,8 +11,7 @@ ENV UV_TORCH_BACKEND=cu129
 RUN ldconfig /usr/local/cuda-12.9/compat/
 
 # Install the PyTorch versions expected by the custom vLLM branch.
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --torch-backend=cu129
+RUN uv pip install --system torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --torch-backend=cu129
 
 ARG VLLM_REPO=https://github.com/seokhyunan/vllm.git
 ARG VLLM_BRANCH=v0.20.1-harmony-continuation
@@ -24,14 +23,13 @@ RUN git clone --filter=blob:none --no-checkout --branch "${VLLM_BRANCH}" --singl
     && git checkout --detach "${VLLM_COMMIT}"
 
 WORKDIR /vllm-workspace
-RUN --mount=type=cache,target=/root/.cache/uv \
-    VLLM_USE_PRECOMPILED=1 uv pip install --system --editable . --torch-backend=cu129
+RUN VLLM_USE_PRECOMPILED=1 uv pip install --system --editable . --torch-backend=cu129
+RUN VLLM_DOCKER_BUILD_CONTEXT=1 bash -c 'bash <(curl -fsSL https://raw.githubusercontent.com/vllm-project/vllm/main/tools/install_deepgemm.sh)'
 WORKDIR /
 
 # Install additional Python dependencies (after vLLM to avoid PyTorch version conflicts)
 COPY builder/requirements.txt /requirements.txt
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system -r /requirements.txt --torch-backend=cu129
+RUN uv pip install --system -r /requirements.txt --torch-backend=cu129
 
 # Suppress Ray metrics agent warnings and keep tokenizers thread usage bounded.
 ENV HF_DATASETS_CACHE="/runpod-volume/huggingface-cache/datasets" \
